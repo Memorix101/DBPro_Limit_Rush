@@ -1,0 +1,741 @@
+`---------------------------
+`Limit Rush
+`Lesson 19
+`---------------------------
+`http://www.binarymoon.co.uk
+`Ben aka Mop
+`---------------------------
+
+`--------
+`INCLUDES
+`--------
+
+`include the MatEdit LoadMatrix files
+#include "LoadMatrix.dba"
+`include the 3D sprite library
+#include "sprite.dba"
+
+`------
+`ARRAYS
+`------
+`declare the MatEdit variables
+Dim BigMatrix(600,600,1)
+Dim StartLoc_X(1): Dim StartLoc_Z(1):Dim Info(2)
+Dim TArrayX(1): Dim TArrayZ(1): Dim FKey(10,1)
+Dim ColData(100): Dim ZoneData(100): Dim Tiles(500,500)
+Dim OverTexture$(100): Dim OverName$(20): Dim ReplaceTex(100)
+Dim MOffsetX(25): Dim MOffsetY(25)
+Dim MWire(20): Dim MGhost(20): Dim Lock(20)
+Dim MatX#(20): Dim MatY#(20): Dim MatZ#(20)
+Dim MatWidth#(20): Dim MatHeight#(20)
+Dim TilesX(20): Dim TilesZ(20)
+Dim MatHi#(20): Dim MatLo#(20)
+
+`--------------
+` Hot Spot Data
+`--------------
+Dim HotSpot(0)
+Dim oldHotSpot(0)
+
+`--------
+` Gravity
+`--------
+Dim gravity#(0):   gravity#(0) = 0.1
+
+`---------
+`Player Movement Arrays
+`---------
+Dim xSpeed#(4)
+Dim ySpeed#(4)
+Dim zSpeed#(4)
+Dim friction#(4)
+Dim moveDist#(4)
+Dim targetCount(4)
+
+`----------
+`Initialize Variables
+`----------
+ArenaXZ_SF = 15000  `Arena Scaling Factor
+ArenaY_SF = 15000
+LightXZ_SF# = .46
+LightY_SF# = .55
+
+
+`set up the program
+sync on
+sync rate 30
+hide mouse
+autocam off
+
+load image "media/dummy.jpg",1000
+paste image 1000,195,180
+sync
+sleep 3000
+delete image 1000
+
+`----------------------
+`display company splash
+`----------------------
+load image "media/binarymoon.jpg",1000
+paste image 1000,195,180
+sync
+sleep 3000
+delete image 1000
+
+`----------------------
+`display company splash
+`----------------------
+load image "media/fmg.jpg",1000
+paste image 1000,120,130
+sync
+sleep 3000
+delete image 1000
+
+
+`----------------------
+`display company splash
+`----------------------
+load image "media/intro.jpg",1000
+paste image 1000,120,90
+sync
+sleep 4000
+delete image 1000
+
+`load the matrix
+LoadMatrix("map",1)
+
+`temporary load level info
+load object "media/arena.x",100
+load object "media/arena_light.x",101
+
+`scale the arena
+scale object 100, ArenaXZ_SF, ArenaY_SF, ArenaXZ_SF
+scale object 101, ArenaXZ_SF*LightXZ_SF#, ArenaY_SF*LightY_SF#, ArenaXZ_SF*LightXZ_SF#
+
+`position arena
+position object 100,247,189,247
+position object 101,247,189,247
+
+
+`add mip-mapping
+set matrix texture 1,2,1
+set object texture 100,0,1
+set object texture 101,2,1
+
+`set fake light properties
+set object  101,1,1,0,1,0,0,1
+ghost object on 101
+
+`set fog properties
+fog on
+fog distance 2000
+fog color RGB(128,0,0)
+
+`set ambient light amount
+set ambient light 10
+
+`colour main light
+color light 0,RGB(0,0,160)
+
+`make a light
+make light 1
+set point light 1,250,200,250
+color light 1,RGB(255,255,100)
+
+`==============================
+`make a temporary player object
+`==============================
+restore data_player_positions
+for id = 1 to 4
+   make object cube id,3
+   hide limb id,0
+
+   `load hovercraft model
+   load object "media/hovercraft.x",10+id
+   load image "media/hovercraft_"+str$(id)+".jpg",40+id
+   texture object 10+id,40+id
+   scale object 10+id,95,95,95
+
+
+   set object texture 10+id,0,1
+   glue object to limb 10+id,id,0
+
+   ` load players starting position
+   read xPos#
+   read zPos#
+   yPos# = get ground height(1,xPos#,zPos#)
+   ` load angle
+   read yAng#
+
+   ` update the players position
+   position object id,xPos#,yPos#,zPos#
+   yrotate object id,yAng#
+
+   `load players characteristics
+   read friction#(id)
+   read moveDist#(id)
+   xSpeed#(id) = 0
+   zSpeed#(id) = 0
+
+   make object collision box id,-6.5,0,-6.5,7,6.5,0,0
+
+next id
+
+for id = 1 to 4
+   targetCount(id)=0
+next id
+
+
+`==================================
+`load target object (beam of light)
+`==================================
+load object "media/light_beam.x",200
+load object "media/light_beam2.x",201
+
+make object plain 202,15,15
+
+load image "media/light_3.jpg",300
+texture object 202,300
+
+scale object 200,500,1500,500
+scale object 201,500,750,500
+
+ghost object on 200
+ghost object on 201
+`ghost object on 202
+
+set object 200,1,1,0,1,0,0,1
+set object 201,1,1,0,1,0,0,1
+set object 202,1,1,0,1,0,0,1
+
+`target light
+make light 3
+set point light 3,0,0,0
+set light range 3,1000
+color light 3,RGB(0,128,255)
+show light 3
+
+`---------------
+`data statements
+`---------------
+data_player_positions:
+
+`value 1 = x position
+`value 2 = z position
+`value 3 = y angle
+`value 4 = friction
+`value 5 = move distance
+data 262.5,212.5,0,0.974,0.075
+data 212.5,262.5,90,0.98,0.055
+data 262.5,312.5,180,0.975,0.06
+data 312.5,262.5,270,0.965,0.07
+
+
+`===================
+` Turn OFF collision
+`===================
+set object collision off 200 `lights
+set object collision off 201
+set object collision off 202
+
+set object collision off 100 `arena
+set object collision off 101
+
+`=============================================
+` Score Board Sprites
+` - using commands in sprite.dba include file
+`=============================================
+
+make_3d_sprite(31,6.8,6.8)
+make_3d_sprite(61,6.8,3.4)
+
+make_3d_sprite(32,6.8,6.8)
+make_3d_sprite(62,6.8,3.4)
+
+make_3d_sprite(33,6.8,6.8)
+make_3d_sprite(63,6.8,3.4)
+
+make_3d_sprite(34,6.8,6.8)
+make_3d_sprite(64,6.8,3.4)
+
+`load sprite textures
+for i=0 to 10
+   load image "media/score"+str$(i)+".jpg",30+i
+next i
+
+for i = 1 to 4
+   load image "media/name"+str$(i)+".jpg",60+i
+next i
+
+texture object 31,30
+texture object 61,61
+
+texture object 32,30
+texture object 62,62
+
+texture object 33,30
+texture object 63,63
+
+texture object 34,30
+texture object 64,64
+
+ghost object on 31
+ghost object on 32
+ghost object on 33
+ghost object on 34
+
+ghost object on 61
+ghost object on 62
+ghost object on 63
+ghost object on 64
+
+
+`---------
+`MAIN LOOP
+`---------
+main:
+` set target
+new_target()
+
+do
+
+   yAng# = object angle y(1)
+
+   `the following is temporary. There will be more but it will made later
+   `get keyboard input for movement
+   if upkey()=1 then forward = 1 else forward = 0
+   if downkey()=1 then backward = 1 else backward = 0
+   if leftkey()=1 then left = 1 else left = 0
+   if rightkey()=1 then right = 1 else right = 0
+
+   `update the player
+   move_player(1, forward, backward, left, right)
+
+   `move bots
+   for id = 2 to 4
+      control_player_bots(id)
+   next id
+
+   `update chase camera
+   chase_cam(1)
+
+   `check for collisions
+   gosub update_collision
+
+   `display current frame rate
+   `text 5,5, "FPS = " + str$(screen fps())
+   `text 5,45, "Hot Spot = " + str$(CheckHotSpot(1))
+
+   ` create new target if player reaches target
+   for id = 1 to 4
+      if checkHotspot(id)=hotSpot(0)
+         new_target()
+         targetCount(id)= targetCount(id) + 1
+
+         `update score board
+         texture object 30+id,30+targetCount(id)
+
+         `check to see if match is over
+         if targetCount(id) = 10
+            if id = 1 then gosub player_wins else gosub player_lose
+         endif
+
+      endif
+   next id
+
+   `update  taret animation
+   gosub update_target
+
+
+   ` draw scoreboard
+   position_3d_sprite(61,3,1)    `score indicator (car color)
+   position_3d_sprite(31,3,4)    `score
+
+   position_3d_sprite(62,10,1)   `score
+   position_3d_sprite(32,10,4)   `score indicator (car color)
+
+   position_3d_sprite(63,17,1)   `score
+   position_3d_sprite(33,17,4)   `score indicator (car color)
+
+   position_3d_sprite(64,24,1)   `score
+   position_3d_sprite(34,24,4)   `score indicator (car color)
+
+
+
+
+   `update the screen
+   sync
+loop
+
+`==========================
+` Artificial Intelligence
+`==========================
+function control_player_bots(id)
+
+   `set the movement values
+   forward =1
+   backward = 0
+   left = 0
+   right = 0
+
+   `get current bot posistions
+   xPos# = object position x(id)
+   zPos# = object position z(id)
+
+   yAng# = object angle y(id)
+
+   `work out target position
+   targetXPos#=(FKey(hotspot(0),0)*info(0))-(info(0)/2)
+   targetZPos#=(Fkey(hotspot(0),1)*info(1))-(info(1)/2)
+
+   `work out angle between payer and target
+   angle#=atanfull(xPos#-targetXPos#,zPos#-targetZPos#)-yAng#
+
+   `work out direction to turn
+   if angle#<-180
+      left=1
+   else
+      right=1
+   endif
+
+
+   move_player(id,forward,backward,left,right)
+
+endfunction
+
+
+`==========================
+` End the Game
+`==========================
+function End_Game()
+
+   repeat
+      text 25,50 ,"Congratulation!"
+      text 25,60, "Press Space Key to Exit"
+      sync
+   until spacekey() = 1
+
+   end
+
+endfunction
+
+`===========================
+` Pick a new target location
+`===========================
+function new_target()
+
+   ` create new hot spot target
+   repeat
+      HotSpot(0) = rnd(7) + 1
+   until HotSpot(0) <> OldHotSpot(0)
+
+   ` save new hot spot as old hot spot
+   OldHotSpot(0) = HotSpot(0)
+
+   `locate the center of the hot spot tile
+   xPos# = (FKey(HotSpot(0),0) * Info(0) - Info(0)/2)
+   zPos# = (FKey(HotSpot(0),1) * Info(1) - Info(1)/2)
+
+   `locate the height of the hot spot tile
+   yPos# = get ground height(1,xPos#,zPos#)
+
+   `position beam of light
+   position object 200, xPos#,yPos#,zPos#
+   position object 201, xPos#,yPos#,zPos#
+   position object 202, xPos#,yPos#,zPos#
+
+   ` Positon lighting
+   position light 3,xPos#,yPos#+10,zPos#
+
+endfunction
+
+
+`======================================================
+` Work out the current hotspot the player is on (if any)
+`======================================================
+function CheckHotSpot(id)
+
+   ` reset the currentHotSpot return variable
+   currentHotSpot = 0
+
+   `work out the current tile position of the player
+    tileX = int(object position x(id)/Info(0)) + 1
+    tileZ = int(object position z(id)/Info(1)) + 1
+
+    `check for a hot spot match
+    for hotSpot =1 to 10
+      if tileX = FKey(hotSpot,0) and tileZ = FKey(hotSpot,1)
+         currentHotSpot = hotSpot
+         exit
+      endif
+    next hotSpot
+
+endfunction currentHotSpot
+
+
+`=============
+`chase cam
+`=============
+function chase_cam(id)
+
+   `work out the angle of the object being chased
+   yAng#= wrapvalue(object angle y(id)+180)
+
+
+   `grab the objects current position
+   xPos# = object position x(id)
+   yPos# = object position y(id)
+   zPos# = object position z(id)
+
+   `other variables
+   camDist = 15
+   camHeight = 1
+
+   `work out new position
+   xCamPos# = newxvalue(xPos#,yAng#,camDist)
+   zCamPos# = newzvalue(zPos#,yAng#,camDist)
+
+   `camera collision
+   if xCamPos#>485 then xCamPos#=485
+   if zCamPos#>485 then zCamPos#=485
+   if xCamPos#<15 then XCamPos#=15
+   if zCamPos#<15 then zCamPos#=15
+
+   `work out camera height
+   yCamPos# = get ground height (1,xCamPos#,zCamPos#)+camHeight
+   if yCamPos# < yPos#+camHeight then yCamPos# = yPos#+camHeight
+
+   `smooth out the camera effects
+   xCamPos#=curvevalue(xCamPos#,camera position x(),4)
+   yCamPos#=curvevalue(yCamPos#,camera position y(),4)
+   zCamPos#=curvevalue(zCamPos#,camera position z(),4)
+
+   `update camera position
+   position camera xCamPos#,yCamPos#+camHeight,zCamPos#
+   point camera  xPos#, yPos#+camHeight, zPos#
+
+
+
+endfunction
+
+`--------------------------
+` move the specified player
+`--------------------------
+function move_player(id, forward, backward, left, right)
+
+   `----------------------------------
+   ` set object floor offset
+   `----------------------------------
+   floor_offset# = 2.0
+
+   `-----------------------------------
+   ` get the required object properties
+   `-----------------------------------
+   xPos# = object position x(id)
+   yPos# = object position y(id)
+   zPos# = object position z(id)
+   yAng# = object angle y(id)
+
+   `-----------------------------
+   ` Sort out the basic movements
+   `-----------------------------
+   if forward = 1
+      `move forward code here
+      xSpeed#(id) = xSpeed#(id) + newxvalue(0,yAng#,moveDist#(id))
+      zSpeed#(id) = zSpeed#(id) + newzvalue(0,yAng#,moveDist#(id))
+   endif
+
+   if backward = 1
+      `move backward code here
+      xSpeed#(id) = xSpeed#(id) + newxvalue(0,yAng#,moveDist#(id) * -1)
+      zSpeed#(id) = zSpeed#(id) + newzvalue(0,yAng#,moveDist#(id) * -1)
+   endif
+
+   if left = 1
+      `move left code here
+      yrotate object id, wrapvalue(yAng#-4)
+   endif
+
+   if right = 1
+      ` move right code here
+      yrotate object id, wrapvalue(yAng#+4)
+   endif
+
+   `---------------------------------------------------
+   ` sort out friction and other physics related things
+   `---------------------------------------------------
+   ` Work out value with friction and gravity
+   xSpeed#(id) = xSpeed#(id) * friction#(id)
+   zSpeed#(id) = zSpeed#(id) * friction#(id)
+   ySpeed#(id) = ySpeed#(id) + gravity#(0)
+
+   ` Work out the new position
+   xPos# = xPos# + xSpeed#(id)
+   zPos# = zPos# + zSpeed#(id)
+   yPos# = yPos# - ySpeed#(id)
+
+   `collision
+   if xPos#>490 then xPos#=490
+   if zPos#>490 then zPos#=490
+   if xPos#<5 then xPos#=5
+   if zPos#<5 then zPos#=5
+
+
+   ` Work out the height of the  character
+   if yPos# < get ground height(1, xPos#, zPos#)+ floor_offset#
+      ySpeed#(id) = ySpeed#(id) = (yPos# - get ground height(1, xPos#, zPos#))
+      yPos# = get ground height(1, xPos#, zPos#) + floor_offset#
+
+      `------------------------------
+      `tilt the vehicle to the ground
+      `------------------------------
+      distVal#=1
+
+      `work out the positions of the front, back, left and right of the vehicle
+      ang#=yAng#
+      frontX#=newxvalue(xPos#,ang#,distVal#)
+      frontZ#=newzvalue(zPos#,ang#,distVal#)
+
+      ang#=yAng#+180
+      backX#=newxvalue(xPos#,ang#,distVal#)
+      backZ#=newzvalue(zPos#,ang#,distVal#)
+
+      ang#=yAng#+90
+      leftX#=newxvalue(xPos#,ang#,distVal#)
+      leftZ#=newzvalue(zPos#,ang#,distVal#)
+
+      ang#=yAng#-90
+      rightX#=newxvalue(xPos#,ang#,distVal#)
+      rightZ#=newzvalue(zPos#,ang#,distVal#)
+
+      `work out the different heights
+      frontHeight# = get ground height(1,frontX#,frontZ#)
+      backHeight# = get ground height(1,backX#,backZ#)
+      leftHeight# = get ground height(1,leftX#,leftZ#)
+      rightHeight# = get ground height(1,rightX#,rightZ#)
+
+      `Work out tilt values
+      xAng#=wrapvalue((frontHeight#-backHeight#)*30)
+      zAng#=wrapvalue((leftHeight#-rightHeight#)*30)
+
+      `Work out tilt values
+      xAng#=curveangle((frontHeight#-backHeight#)*30,object angle x(id+10),5)
+      zAng#=curveangle((leftHeight#-rightHeight#)*30,object angle z(id+10),5)
+
+      `-----------------
+      `slide down slopes
+      `-----------------
+      xMoveDist#=(backHeight#-frontHeight#)/30
+      zMoveDist#=(leftHeight#-rightHeight#)/30
+
+      `adjust forward/ backward momentum
+      xSpeed#(id)=xSpeed#(id)+newxvalue(0,yAng#,xMoveDist#)
+      zSpeed#(id)=zSpeed#(id)+newzvalue(0,yAng#,xMoveDist#)
+
+      `adjust left/ right momentum
+      xSpeed#(id)=xSpeed#(id)+newxvalue(0,yAng#-90,zMoveDist#)
+      zSpeed#(id)=zSpeed#(id)+newzvalue(0,yAng#-90,zMoveDist#)
+
+
+      `update the vehicle rotation
+      rotate object id+10,xAng#,180,zAng#
+
+   endif
+
+   angle#=atanfull(xPos#-targetXPos,zPos#-targetZPos)-yAng
+   ` Reposition the player object
+   position object id, xPos#, yPos# , zPos#
+
+   `display camera object postition for player 1
+   if id = 1
+      `text 5,15, "X Position = " + str$(xPos#)
+      `text 5,25, "Y Position = " + str$(yPos#)
+      `text 5,35, "Z Position = " + str$(zPos#)
+   endif
+
+endfunction
+
+
+`=================
+` rotate the taget
+`=================
+update_target:
+
+   yrotate object 200, wrapvalue(object angle y(200)+2)
+   yrotate object 201, wrapvalue(object angle y(201)-2)
+   yrotate object 202, wrapvalue(object angle y(202)-60)
+
+return
+
+
+`======================
+` update collision data
+`======================
+update_collision:
+
+   `----------------------------------
+   ` set object floor offset
+   `----------------------------------
+   floor_offset# = 2.0
+
+   for id = 1 to 4
+      xPos# = object position x(id)
+      zPos# = object position z(id)
+      yPos# = get ground height(1,xPos#,zPos#) + floor_offset#
+
+      pCollision = object collision(id,0)
+
+      if pCollision > 0
+         xPos# = xPos# - (get object collision x()/2)
+         zPos# = zPos# - (get object collision z()/2)
+      endif
+
+      position object id,xPos#,yPos#,zPos#
+
+   next id
+return
+
+
+`============
+` Player Wins
+`============
+player_wins:
+
+   yAng# = object angle y(1)
+
+   do
+
+
+      for id = 1 to 4
+         control_player_bots(id)
+         if CheckHotSpot(id) = hotspot(0) then new_target()
+      next id
+
+      `update camera position
+      yAng# = yAng# + 2
+
+      xCamPos# = newxvalue(object position x(1),yAng#,25)
+      zCamPos# = newzvalue(object position z(1),yAng#,25)
+
+      yCamPos# = get ground height(1, xCamPos#, zCamPos#)
+
+      position camera xCamPos#,yCamPos#+20,zCamPos#
+      point camera object position x(1), object position y(1)+ 2, object position z(1)
+
+      gosub update_target
+      gosub update_collision
+
+      sync
+   loop
+
+
+return
+
+
+`============
+` Player Lose
+`============
+player_lose:
+   end
+return
+

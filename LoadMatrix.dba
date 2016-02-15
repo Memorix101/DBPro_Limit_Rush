@@ -1,0 +1,328 @@
+function LoadMatrix(Project$,MatNum)
+  Success=0
+  Filename$=Project$+".MDF": Rem Matrix Definition File
+  Open To Read 1,Filename$
+    Read String 1,T$:                             Rem Header
+    If T$<>"MatEdit V1.6a .MDF Matrix Definition File"
+      Goto FailureLabel: Rem Tried to load an incompatible older version MDF file
+    Endif
+    Read String 1,T$: MatWidth#=Val(T$):          Rem Pixel Width Of Matrix
+    Read String 1,T$: MatHeight#=Val(T$):         Rem Pixel Height Of Matrix
+    Read String 1,T$: TilesX(1)=Val(T$):          Rem Matrix Tiles X
+    Read String 1,T$: TilesZ(1)=Val(T$):          Rem Matrix Tiles Y
+    TilesizeX#=MatWidth#/TilesX(1)
+    TilesizeZ#=MatHeight#/TilesZ(1)
+    Info(0)=TilesizeX#: Info(1)=TilesizeZ#
+    Read String 1,T$: TextureSize#=Val(T$):       Rem Size Of Matrix Textures
+    Read String 1,T$: Foggy=Val(T$):              Rem Fog Flag (0=Off or 1=On)
+    Read String 1,T$: FRed=Val(T$):               Rem Fog Colour Red Value
+    Read String 1,T$: FGreen=Val(T$):             Rem Fog Colour Green Value
+    Read String 1,T$: FBlue=Val(T$):              Rem Fog Colour Blue Value
+    Read String 1,T$: FDist=Val(T$):              Rem Fog Distance Value
+    If Foggy=1
+      Fog Color RGB(FRed,FGreen,FBlue)
+      FOG DISTANCE FDist
+      Fog On
+    Else
+      Fog Off
+    Endif
+    Read String 1,T$: Norm=Val(T$):               Rem Normals Flag
+    Read String 1,T$: UsedTex=Val(T$):            Rem Number Of Textures Used In Matrix
+    Read String 1,T$: UsersImage#=Val(T$):        Rem Number Of Textures Across/Down Image
+    Make Matrix 1,MatWidth#,MatHeight#,TilesX(1),TilesZ(1)
+    Rem Load Project Texture Image Here...
+    Bmpname$="_"+Project$+".bmp"
+    Load Bitmap Bmpname$,1
+    Get Image 1,0,0,Int(UsersImage#*TextureSize#),Int(UsersImage#*TextureSize#)
+    Delete Bitmap 1
+    Rem Create texture tile set from project image...
+    PREPARE MATRIX TEXTURE 1,1,Int(UsersImage#),Int(UsersImage#)
+    Rem Read in texture values for each matrix tile...
+    For N1=0 To TilesZ(1)-1
+      For N2=0 To TilesX(1)-1
+        Read String 1,T$: MatTex=Val(T$)
+        SET MATRIX TILE 1,N2,N1,MatTex
+        Tiles(N2,N1)=MatTex
+      Next N2
+    Next N1
+    Rem Read in height values for each matrix tile...
+    For N1=0 To TilesZ(1)
+      For N2=0 To TilesX(1)
+        Read String 1,T$: MatHt#=Val(T$)
+        SET MATRIX HEIGHT 1,N2,N1,MatHt#
+      Next N2
+    Next N1
+    If Norm=1
+      rem Following Routine by Lee Bamber from Dark Basic Example Code
+      for z=1 to TilesZ(1)
+        for x=1 to TilesX(1)
+          h8#=get matrix height(1,x,z-1)
+          h4#=get matrix height(1,x-1,z)
+          h#=get matrix height(1,x,z)
+          h2#=get matrix height(1,x,z)
+          x1#=(x-1)*25.0 : y1#=h#
+          x2#=(x+0)*25.0 : y2#=h4#
+          dx#=x2#-x1#: dy#=y2#-y1#
+          ax#=atanfull(dx#,dy#)
+          ax#=wrapvalue(90-ax#)
+          z1#=(z-1)*25.0 : y1#=h2#
+          z2#=(z+0)*25.0 : y2#=h8#
+          dz#=z2#-z1#: dy#=y2#-y1#
+          az#=atanfull(dz#,dy#)
+          az#=wrapvalue(90-az#)
+          nx#=sin(ax#): ny#=cos(ax#): nz#=sin(az#)
+          Set matrix normal 1,x,z,nx#,ny#,nz#
+       next x
+      next z
+    Endif
+    Rem Load Collision & Zone Data...
+    Info(2)=UsedTex
+    For WN1=1 To UsedTex
+      Read String 1,T$: ColData(WN1)=Val(T$):  Rem <<< Collision Value (0 or 1) of textures used
+      Read String 1,T$: ZoneData(WN1)=Val(T$): Rem <<< Zone Data (0 to 9) of textures used
+    Next WN1
+    Rem Load Hotspot Data...
+    For WN1=1 To 10
+      Read String 1,T$: FKey(WN1,0)=Val(T$): Rem X Pos
+      Read String 1,T$: FKey(WN1,1)=Val(T$): Rem Z Pos
+    Next WN1
+  Close File 1
+  Update Matrix 1: Rem Update the matrix with all the changes
+  Success=1
+  FailureLabel:
+EndFunction Success
+
+Function Collision(obj)
+  Collision=0
+  TileX=Int(Object Position X(Obj)/Info(0))
+  TileZ=Int(Object Position Z(Obj)/Info(1))
+  Tile=Tiles(TileX,TileZ)
+  If ColData(Tile)=1 then Collision=1
+Endfunction Collision
+
+Function CheckZone(X,Z)
+  TileX=Int(X/Info(0))
+  TileZ=Int(Z/Info(1))
+  Tile=Tiles(TileX,TileZ)
+  Zone=ZoneData(Tile)
+Endfunction Zone
+
+Function LoadMMA(Project$,MatNum,XWid,YWid,XSeg,YSeg)
+  Filename$=Project$+".MMA": Rem Monster Matrix Array
+  Texsize#=Info(0)
+  If FILE EXIST(Filename$)
+    Open To Read 1,Filename$
+      Read String 1,T$:                               Rem ID Header
+      Read String 1,T$: ArrayMatWid=Val(T$):          Rem Monster Matrix Width Tiles
+      TArrayX(0)=ArrayMatWid:                         Rem Array To Return value In
+      Read String 1,T$: ArrayMatHig=Val(T$):          Rem Monster Matrix Height Tiles
+      TArrayZ(0)=ArrayMatHig:                         Rem Array To Return value In
+      Read String 1,T$: StartLoc_X(0)=Val(T$):        Rem Start Position X
+      Read String 1,T$: StartLoc_Z(0)=Val(T$):        Rem Start Position Z
+      UnDim BigMatrix()
+      Dim BigMatrix(ArrayMatWid,ArrayMatHig,2)
+      For Y = 0 to ArrayMatHig:                Rem Height Array Data
+        For X = 0 to ArrayMatWid
+          Read String 1,T$: BigMatrix(X,Y,0)=Val(T$)
+        Next X
+      Next Y
+      For Y =0 to ArrayMatHig-1:               Rem Texture Array Data
+        For X = 0 to ArrayMatWid-1
+          Read String 1,T$: BigMatrix(X,Y,1)=Val(T$)
+        Next X
+      Next Y
+    Close File 1
+    Make Matrix MatNum,XWid,YWid,XSeg,YSeg
+    Bmpname$="_"+Project$+".BMP"
+    Load Image Bmpname$,1
+    PREPARE MATRIX TEXTURE 1,1,3,3
+    Update Matrix 1
+  Endif
+EndFunction
+
+Function LoadMMF(Project$)
+  Sync On
+  Filename$=Project$+".MMF": Rem Multi Matrix File
+  Texsize#=Info(0)
+  If FILE EXIST(Filename$)
+    Open To Read 1,Filename$
+      Read String 1,T$: Rem Header Info
+      Read String 1,T$: TotMat=Val(T$):               Rem Total Num Matrices Used
+      Read String 1,T$: TArrayX(0)=Val(T$):           Rem Max Array Width (75)
+      Read String 1,T$: TArrayZ(0)=Val(T$):           Rem Max Array Height (25)
+      Read String 1,T$: Tilesize#=Val(T$):            Rem Tile Size
+      Read String 1,T$: UsersImage#=Val(T$):          Rem Texture Grid Size
+      Rem Read Number Conversions...
+      Read String 1,T$: Overtex=Val(T$):              Rem Textures Used In This Matrix
+      For JK=1 to Overtex
+        Read String 1,T$: OverTexture$(JK)=T$:        Rem Texture Name
+        Read String 1,T$: S1=Val(T$):                 Rem Old Image Texture Number
+        Read String 1,T$: S2=Val(T$):                 Rem New Image Texture Number
+        ReplaceTex(S1)=S2
+      Next JK
+      For WN1=1 To TotMat
+        Read String 1,T$: OverName$(WN1)=T$
+        Read String 1,T$: MOffsetX(WN1)=Val(T$):      Rem Matrix X Offset Within Array
+        Read String 1,T$: MOffsetY(WN1)=Val(T$):      Rem Matrix Y Offset Within Array
+        Read String 1,T$:                             Rem Matrix Anchor (Unused Here)
+        Read String 1,T$: MWire(WN1)=Val(T$)
+        Read String 1,T$: MGhost(WN1)=Val(T$)
+        Read String 1,T$: MatX#(WN1)=Val(T$):         Rem Matrix X Position
+        Read String 1,T$: MatY#(WN1)=Val(T$):         Rem Matrix Y Position
+        Read String 1,T$: MatZ#(WN1)=Val(T$):         Rem Matrix Z Position
+        Read String 1,T$: MatWidth#(WN1)=Val(T$):     Rem Matrix Width Pixels
+        Read String 1,T$: MatHeight#(WN1)=Val(T$):    Rem Matrix Height Pixels
+        Read String 1,T$: TilesX(WN1)=Val(T$):        Rem Matrix Width Tiles
+        Read String 1,T$: TilesZ(WN1)=Val(T$):        Rem Matrix Height Tiles
+        Read String 1,T$: MatHi#(WN1)=Val(T$):        Rem Matrix Heighest Height
+        Read String 1,T$: MatLo#(WN1)=Val(T$):        Rem Matrix Lowest Height
+      Next WN1
+    Close File 1
+    Bmpname$="-"+Project$+".BMP"
+    Load Image Bmpname$,1
+    For N=1 to TotMat: Rem Load All MA0 Files
+      If MATRIX EXIST(N) then Delete Matrix N: Rem Delete all extra matrices...
+      Filename$=OverName$(N)+".MA0"
+      Open To Read 1,Filename$
+        For N2=1 To 5
+          Read String 1,T$:                    Rem Unwanted Data
+        Next N2
+        Read String 1,T$: TilesX(N)=Val(T$):         Rem Num Used Textures
+        Read String 1,T$: TilesZ(N)=Val(T$):         Rem Num Used Textures
+        For N2=1 To 7
+          Read String 1,T$:                    Rem Unwanted Data
+        Next N2
+        Read String 1,T$: UTM=Val(T$):         Rem Num Used Textures
+        Read String 1,T$:                      Rem GreenTile (Unwanted Data)
+        Make Matrix N,MatWidth#(N),MatHeight#(N),TilesX(N),TilesZ(N):Rem Line 391
+        PREPARE MATRIX TEXTURE N,1,Int(UsersImage#),Int(UsersImage#)
+        For q1=1 To UTM
+          Read String 1,T$
+          Read String 1,T$
+          Read String 1,T$
+          Read String 1,T$: Rem Unwanted Data
+        Next q1
+        For N1=0 To TilesZ(N)-1: Rem Read in texture values for each matrix tile
+          For N2=0 To TilesX(N)-1
+            Read String 1,T$: MatTex=Val(T$)
+            SET MATRIX TILE N,N2,N1,ReplaceTex(MatTex)
+            Tiles(N2,N1)=MatTex
+          Next N2
+        Next N1
+        For N1=0 To TilesZ(N): Rem Read in height values for each matrix tile
+          For N2=0 To TilesX(N)
+            Read String 1,T$: MatHt#=Val(T$): Rem Height
+            SET MATRIX HEIGHT N,N2,N1,MatHt#
+          Next N2
+        Next N1
+        If N=1
+          For WN1=1 To 10
+            Read String 1,T$: FDesc$=T$:           Rem Description - Unused As Yet
+            Read String 1,T$: FKey(WN1,0)=Val(T$)+TArrayXPox: Rem X Pos
+            Read String 1,T$: FKey(WN1,1)=Val(T$)+TArrayYPos: Rem Z Pos
+          Next WN1
+        Endif
+      Close File 1
+      Position Matrix N,MatX#(N),MatY#(N),MatZ#(N)
+      If TilesX(N)>1 and TilesZ(N)>1
+        Normalise(N,TilesX(N),TilesZ(N))
+      Endif
+      If MWire(N)=1
+        SET MATRIX WIREFRAME ON N
+      Endif
+      If MGhost(N)=1
+        GHOST MATRIX ON N
+      Endif
+      Update Matrix N
+    Next N
+  Endif
+  Sync
+EndFunction TotMat
+
+Function GetMatrix(TotMat,X#,Y#,Z#,Ignore)
+  MatString$=""
+  For N=1 to TotMat
+    If N<>Ignore
+      Tlx#=MatX#(N): Tlz#=MatZ#(N): Brx#=MatX#(N)+MatWidth#(N): Brz#=MatZ#(N)+MatHeight#(N)
+      IF X#>Tlx# and X#<Brx# and Z#>Tlz# and Z#<Brz#
+        MatString$=MatString$+chr$(N+64)
+      Endif
+    Endif
+  Next N
+Endfunction MatString$
+
+Function MatStack(MatString$,X#,Y#,Z#)
+  MatCount=Len(MatString$): Rem Number found
+  Dim Level(25): Stack$=""
+  If MatCount>1: Rem If more than 1 matrix detected...
+    For N=1 to MatCount
+      Level(N)=Asc(Mid$(MatString$,N))-64: Rem get matrix numbers (-64 turns A into 1)
+    Next N
+    Repeat: Rem Sort them into height order...
+      Swap=0
+      For N=1 to MatCount-1
+        L1#=Get Ground Height(Level(N),X#-MatX#(Level(N)),Z#-MatZ#(Level(N)))+MatY#(Level(N))
+        L2#=Get Ground Height(Level(N+1),X#-MatX#(Level(N+1)),Z#-MatZ#(Level(N+1)))+MatY#(Level(N+1))
+        If L1#>L2#
+          Temp=Level(N)
+          Level(N)=Level(N+1)
+          Level(N+1)=Temp
+          Swap=1
+        Endif
+      Next N
+    Until Swap=0
+    For N=1 to MatCount-1
+      L1#=Get Ground Height(Level(N),X#-MatX#(Level(N)),Z#-MatZ#(Level(N)))+MatY#(Level(N))
+      L2#=Get Ground Height(Level(N+1),X#-MatX#(Level(N+1)),Z#-MatZ#(Level(N+1)))+MatY#(Level(N+1))
+      If L1#<Y# and L2#>Y#
+        Stack$=CHR$(Level(N)+64)
+        Stack$=Stack$+CHR$(Level(N+1)+64)
+        Exit
+      Endif
+    Next N
+    If Stack$="": Rem On the very top of the stack
+      For N=MatCount to 1 step -1
+        L1#=Get Ground Height(Level(N),X#-MatX#(Level(N)),Z#-MatZ#(Level(N)))+MatY#(Level(N))
+        If L1#<Y#
+          Stack$=CHR$(Level(N)+64)
+          Stack$=Stack$+CHR$(64)
+          Exit
+        Endif
+      Next N
+    Endif
+  Else : Rem if Matcount=1 or 0
+    If Matcount=1
+      Level(1)=Asc(Mid$(MatString$,1))-64
+      Stack$=CHR$(Level(1)+64)
+      Stack$=Stack$+CHR$(64)
+    Else: Rem if matcount=0
+      Stack$=""
+      Stack$=CHR$(64)
+    Endif
+  Endif
+Endfunction Stack$
+
+Function Normalise(MatNum,TX,TZ)
+  rem Following Routine by Lee Bamber from Dark Basic Example Code
+  for z=1 to TZ
+    for x=1 to TX
+      h8#=get matrix height(MatNum,x,z-1)
+      h4#=get matrix height(MatNum,x-1,z)
+      h#=get matrix height(MatNum,x,z)
+      h2#=get matrix height(MatNum,x,z)
+      x1#=(x-1)*25.0 : y1#=h#
+      x2#=(x+0)*25.0 : y2#=h4#
+      dx#=x2#-x1#: dy#=y2#-y1#
+      ax#=atanfull(dx#,dy#)
+      ax#=wrapvalue(90-ax#)
+      z1#=(z-1)*25.0 : y1#=h2#
+      z2#=(z+0)*25.0 : y2#=h8#
+      dz#=z2#-z1#: dy#=y2#-y1#
+      az#=atanfull(dz#,dy#)
+      az#=wrapvalue(90-az#)
+      nx#=sin(ax#): ny#=cos(ax#): nz#=sin(az#)
+      Set matrix normal MatNum,x,z,nx#,ny#,nz#
+    next x
+  next z
+  Update Matrix MatNum
+EndFunction
