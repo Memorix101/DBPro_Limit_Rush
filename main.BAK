@@ -67,12 +67,30 @@ sync rate 30
 hide mouse
 autocam off
 
+`set font properties
+set text font "verdana"
+set text to bold
+
+
+   
+   `----------------
+`sounds and music
+`----------------
+`load music
+load music "media/mindtrick.mid",1
+load music "media/pinnacle.mid",2
+load music "media/torrent.mid",3
+
+
 load image "media/dummy.jpg",1000
 paste image 1000,195,180
 sync
 sleep 3000
 delete image 1000
 
+
+ //loop music 1
+ 
 `----------------------
 `display company splash
 `----------------------
@@ -104,9 +122,26 @@ delete image 1000
 `load the matrix
 LoadMatrix("map",1)
 
+`sound effects
+load sound "media/menubeep.wav",1
+load 3dsound "media/powerdown.wav",2
+load sound "media/beep.wav",3
+
+`load engine sounds
+load 3dsound "media/engines.wav",11 : set sound volume 11,50
+load 3dsound "media/engines.wav",12 : set sound volume 12,50
+load 3dsound "media/engines.wav",13 : set sound volume 13,50
+load 3dsound "media/engines.wav",14 : set sound volume 14,50
+
 `temporary load level info
 load object "media/arena.x",100
 load object "media/arena_light.x",101
+
+LOAD IMAGE "media/light_1.jpg",350
+TEXTURE OBJECT 101, 350
+
+LOAD IMAGE "media/wall_1.jpg",351
+TEXTURE OBJECT 100, 351
 
 `scale the arena
 scale object 100, ArenaXZ_SF, ArenaY_SF, ArenaXZ_SF
@@ -169,20 +204,27 @@ for id = 1 to 4
 
    ` update the players position
    position object id,xPos#,yPos#,zPos#
-   yrotate object id,yAng#
-
+   yrotate object id,yAng# 
+   
+      
    `load players characteristics
    read friction#(id)
    read moveDist#(id)
    xSpeed#(id) = 0
    zSpeed#(id) = 0
 
-   make object collision box id,-6.5,0,-6.5,7,6.5,0,0
+   make object collision box id,-6.5,0,-6.5,7,6.5,0,0   
 
 next id
 
 for id = 1 to 4
    targetCount(id)=0
+   
+        `start the sounds playing
+      loop sound id+10
+      set sound volume id+10,90
+      position sound id+10,xPos#,yPos#,zPos#
+   
 next id
 
 
@@ -192,28 +234,37 @@ next id
 load object "media/light_beam.x",200
 load object "media/light_beam2.x",201
 
-make object plain 202,15,15
+load image "media/light_2.jpg",800
+texture object 201,800
+SCALE OBJECT TEXTURE 201, 2, 2 
 
+load image "media/light_2.jpg",801
+texture object 200,801
+SCALE OBJECT TEXTURE 200, 2, 2 
+
+
+make object plain 202,175,175
 load image "media/light_3.jpg",300
 texture object 202,300
+set object rotation zyx 202
+
 
 scale object 200,500,1500,500
 scale object 201,500,750,500
 
 ghost object on 200
 ghost object on 201
-`ghost object on 202
+ghost object on 202
 
-set object 200,1,1,0,1,0,0,1
-set object 201,1,1,0,1,0,0,1
-set object 202,1,1,0,1,0,0,1
+set object  200,1,1,0,1,0,0,1
+set object  201,1,1,0,1,0,0,1
+set object  202,1,1,0,1,0,0,1
 
 `target light
 make light 3
 set point light 3,0,0,0
-set light range 3,1000
 color light 3,RGB(0,128,255)
-show light 3
+set light range 3,1000
 
 `---------------
 `data statements
@@ -296,9 +347,10 @@ ghost object on 64
 main:
 ` set target
 new_target()
-
+   
+if counter = 0 then countdown()
+      
 do
-
    yAng# = object angle y(1)
 
    `the following is temporary. There will be more but it will made later
@@ -307,7 +359,7 @@ do
    if downkey()=1 then backward = 1 else backward = 0
    if leftkey()=1 then left = 1 else left = 0
    if rightkey()=1 then right = 1 else right = 0
-
+   
    `update the player
    move_player(1, forward, backward, left, right)
 
@@ -316,9 +368,10 @@ do
       control_player_bots(id)
    next id
 
+
    `update chase camera
    chase_cam(1)
-
+  
    `check for collisions
    gosub update_collision
 
@@ -359,13 +412,57 @@ do
 
    position_3d_sprite(64,24,1)   `score
    position_3d_sprite(34,24,4)   `score indicator (car color)
-
-
-
-
+   
    `update the screen
    sync
 loop
+
+function countdown()
+
+   SET TEXT SIZE 150
+
+   `count down
+   do
+
+   yAng# = object angle y(1)
+   
+      `update the player
+   move_player(1, forward, backward, left, right)
+   
+    `move bots
+   for id = 2 to 4
+      turn_player_bots(id)
+   next id
+   
+   `check for collisions
+   gosub update_collision
+   
+      `update  taret animation
+   gosub update_target
+
+  
+   `update chase camera
+   chase_cam(1)
+
+      `count time elapsed
+      inc counter
+      if counter=120 then exit
+
+      `display count down
+      if counter>0 and counter<=40 then center_write(screen width()/2, (screen height()/2)-30,"3")
+      if counter>40 and counter<=80 then center_write(screen width()/2, (screen height()/2)-30,"2")
+      if counter>80 and counter<=120 then center_write(screen width()/2, (screen height()/2)-30,"1")
+
+      if counter=1 then play sound 3
+      if counter=40 then play sound 3
+      if counter=80 then play sound 3
+
+      `update world
+      gosub update_target
+      sync
+
+  loop 
+endfunction
 
 `==========================
 ` Artificial Intelligence
@@ -388,7 +485,7 @@ function control_player_bots(id)
    targetXPos#=(FKey(hotspot(0),0)*info(0))-(info(0)/2)
    targetZPos#=(Fkey(hotspot(0),1)*info(1))-(info(1)/2)
 
-   `work out angle between payer and target
+   `work out angle between player and target
    angle#=atanfull(xPos#-targetXPos#,zPos#-targetZPos#)-yAng#
 
    `work out direction to turn
@@ -397,8 +494,31 @@ function control_player_bots(id)
    else
       right=1
    endif
+      
+   move_player(id,forward,backward,left,right)
+
+endfunction
 
 
+function turn_player_bots(id)
+
+   `get current bot posistions
+   xPos# = object position x(id)
+   zPos# = object position z(id)
+
+   yAng# = object angle y(id)
+
+   `work out target position
+   targetXPos#=(FKey(hotspot(0),0)*info(0))-(info(0)/2)
+   targetZPos#=(Fkey(hotspot(0),1)*info(1))-(info(1)/2)
+
+   `work out direction to turn
+   if angle#<-180
+      left=180
+   else
+      right=180
+   endif
+      
    move_player(id,forward,backward,left,right)
 
 endfunction
@@ -424,6 +544,15 @@ endfunction
 `===========================
 function new_target()
 
+   `get light position
+   xPos=object position x(200)
+   yPos=object position y(200)
+   zPos=object position z(200)
+   
+   `play light sound
+   position sound 2,xPos,yPos,zPos
+   play sound 2
+   
    ` create new hot spot target
    repeat
       HotSpot(0) = rnd(7) + 1
@@ -702,10 +831,19 @@ return
 player_wins:
 
    yAng# = object angle y(1)
+   
+
+   STOP MUSIC 1
+   LOOP MUSIC 2
 
    do
 
-
+   SET TEXT size 150  
+   center_write(screen width()/2,screen height()/2 -50,"You Win!")
+   load image "media/win.jpg",400
+   paste image 400,120,90
+   
+   
       for id = 1 to 4
          control_player_bots(id)
          if CheckHotSpot(id) = hotspot(0) then new_target()
@@ -736,6 +874,77 @@ return
 ` Player Lose
 `============
 player_lose:
-   end
+
+   yAng# = object angle y(1)
+   
+
+   
+   STOP MUSIC 1
+   LOOP MUSIC 3
+
+   do
+
+   SET TEXT size 150  
+   center_write(screen width()/2,screen height()/2 -50,"You Lose!")
+
+      for id = 1 to 4
+         control_player_bots(id)
+         if CheckHotSpot(id) = hotspot(0) then new_target()
+      next id
+
+      `update camera position
+      yAng# = yAng# + 2
+
+      xCamPos# = newxvalue(object position x(1),yAng#,25)
+      zCamPos# = newzvalue(object position z(1),yAng#,25)
+
+      yCamPos# = get ground height(1, xCamPos#, zCamPos#)
+
+      position camera xCamPos#,yCamPos#+20,zCamPos#
+      point camera object position x(1), object position y(1)+ 2, object position z(1)
+
+      gosub update_target
+      gosub update_collision
+
+      sync
+   loop
+
+
 return
 
+  `` end
+``return
+
+
+function center_write(x,y,string$)
+
+   ink RGB(0,128,255),0
+
+   `draw outline
+   center text x+1,y+1,string$
+   center text x-1,y-1,string$
+   center text x+1,y-1,string$
+   center text x-1,y+1,string$
+
+   ink rgb(255,255,255),0
+
+   `draw actual letter/number
+   center text x,y,string$
+
+endfunction
+
+`---------------
+`data statements
+`---------------
+data_player_positions:
+
+`value 1 = x position
+`value 2 = z position
+`value 3 = y angle
+`value 4 = friction
+`value 5 = move distance
+
+data 262.5,212.5,0,0.97,0.065
+data 212.5,262.5,90,0.985,0.04
+data 262.5,312.5,180,0.975,0.06
+data 312.5,262.5,270,0.965,0.07
